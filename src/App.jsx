@@ -152,38 +152,96 @@ function formatResult(value) {
   return Number.isInteger(rounded) ? rounded.toFixed(1) : String(rounded);
 }
 
-// Ventana flotante que muestra la camara solo cuando el usuario la necesita.
-function CameraModal({ videoRef, analyzing, onClose, onCapture }) {
+// Mejora nitidez y contraste antes de ejecutar OCR.
+async function prepareImageForOcr(source) {
+  const image = new Image();
+  image.src = source;
+  await image.decode();
+  const scale = Math.max(2, Math.min(3, 1800 / image.width));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(image.width * scale);
+  canvas.height = Math.round(image.height * scale);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  for (let index = 0; index < pixels.data.length; index += 4) {
+    const gray = pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114;
+    const value = gray > 155 ? 255 : gray < 100 ? 0 : Math.round((gray - 100) * 4.64);
+    pixels.data[index] = value;
+    pixels.data[index + 1] = value;
+    pixels.data[index + 2] = value;
+  }
+  ctx.putImageData(pixels, 0, 0);
+  return canvas.toDataURL("image/png");
+}
+
+// Limita Tesseract a los caracteres usados en formulas.
+async function recognizeFormula(source, logger) {
+  const preparedSource = await prepareImageForOcr(source);
+  return Tesseract.recognize(preparedSource, "eng", {
+    logger,
+    tessedit_char_whitelist: "0123456789+-*/().xX"
+  });
+}
+
+// Ventana para capturar una foto y decidir si se envia al OCR.
+function CameraModal({ videoRef, capturedUrl, analyzing, onClose, onCapture, onScan, onRetake }) {
   return (
     <div className="modal-backdrop fixed inset-0 z-50 bg-slate-950/90 p-3 backdrop-blur-sm md:p-6">
       <section className="tree-modal mx-auto flex h-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-slate-950 shadow-2xl">
         <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-4 text-white">
           <div>
             <p className="text-xs font-black uppercase text-cyan-300">Camara OCR</p>
-            <h2 className="text-xl font-black">Apunta hacia la formula</h2>
+            <h2 className="text-xl font-black">{capturedUrl ? "Confirma la fotografia" : "Apunta hacia la formula"}</h2>
           </div>
-          <button className="rounded-full bg-white px-4 py-2 font-black text-slate-950" onClick={onClose}>
-            Cerrar X
-          </button>
+          <button className="rounded-full bg-white px-4 py-2 font-black text-slate-950" onClick={onClose}>Cerrar X</button>
         </div>
 
         <div className="relative flex-1 overflow-hidden bg-black">
-          <video ref={videoRef} className="h-full w-full object-cover" autoPlay playsInline muted />
-          <div className="absolute inset-6 border border-cyan-200/40">
+          <video ref={videoRef} className={`h-full w-full object-cover ${capturedUrl ? "hidden" : "block"}`} autoPlay playsInline muted />
+          {capturedUrl ? <img src={capturedUrl} alt="Fotografia capturada" className="h-full w-full object-contain" /> : null}
+          <div className="pointer-events-none absolute inset-6 border border-cyan-200/40">
             <span className="absolute -left-px -top-px h-12 w-12 border-l-4 border-t-4 border-cyan-300" />
             <span className="absolute -right-px -top-px h-12 w-12 border-r-4 border-t-4 border-cyan-300" />
             <span className="absolute -bottom-px -left-px h-12 w-12 border-b-4 border-l-4 border-cyan-300" />
             <span className="absolute -bottom-px -right-px h-12 w-12 border-b-4 border-r-4 border-cyan-300" />
-            <span className="scanner-line absolute left-4 right-4 top-6 h-0.5 bg-gradient-to-r from-transparent via-cyan-200 to-transparent shadow-[0_0_20px_rgba(103,232,249,0.9)]" />
-          </div>
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-slate-950/75 px-4 py-2 text-xs font-black uppercase text-cyan-100">
-            {analyzing ? "Leyendo formula..." : "Escaneo automatico activo"}
+            {analyzing ? <span className="scanner-line absolute left-4 right-4 top-6 h-0.5 bg-gradient-to-r from-transparent via-cyan-200 to-transparent" /> : null}
           </div>
         </div>
 
-        <div className="border-t border-white/10 bg-slate-950 p-4">
-          <button className="w-full rounded-xl bg-emerald-600 px-4 py-4 text-lg font-black text-white shadow-lg disabled:opacity-60" onClick={onCapture} disabled={analyzing}>
-            {analyzing ? "Procesando OCR..." : "Capturar y analizar ahora"}
+        <div className="grid grid-cols-2 gap-3 border-t border-white/10 p-4">
+          {capturedUrl ? (
+            <>
+              <button className="rounded-xl bg-slate-700 px-4 py-4 font-black text-white" onClick={onRetake} disabled={analyzing}>Tomar otra</button>
+              <button className="rounded-xl bg-emerald-600 px-4 py-4 font-black text-white" onClick={onScan} disabled={analyzing}>{analyzing ? "Escaneando..." : "Escanear foto"}</button>
+            </>
+          ) : (
+            <button className="col-span-2 rounded-xl bg-emerald-600 px-4 py-4 text-lg font-black text-white" onClick={onCapture}>Tomar fotografia</button>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// Vista previa para confirmar una imagen elegida desde la galeria.
+function ImageModal({ previewUrl, analyzing, onClose, onScan }) {
+  return (
+    <div className="modal-backdrop fixed inset-0 z-50 bg-slate-950/90 p-3 backdrop-blur-sm md:p-6">
+      <section className="tree-modal mx-auto flex h-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4">
+          <div>
+            <p className="text-xs font-black uppercase text-blue-700">Imagen seleccionada</p>
+            <h2 className="text-xl font-black text-slate-950">Confirma antes de escanear</h2>
+          </div>
+          <button className="rounded-full bg-slate-950 px-4 py-2 font-black text-white" onClick={onClose}>Cerrar X</button>
+        </div>
+        <div className="flex-1 overflow-hidden bg-slate-100 p-3">
+          <img src={previewUrl} alt="Imagen seleccionada" className="h-full w-full object-contain" />
+        </div>
+        <div className="border-t border-slate-200 p-4">
+          <button className="w-full rounded-xl bg-emerald-700 px-4 py-4 text-lg font-black text-white" onClick={onScan} disabled={analyzing}>
+            {analyzing ? "Escaneando imagen..." : "Escanear imagen"}
           </button>
         </div>
       </section>
@@ -403,6 +461,9 @@ export default function App() {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showTree, setShowTree] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [showImage, setShowImage] = useState(false);
+  const [capturedUrl, setCapturedUrl] = useState("");
+  const [showKeyboard, setShowKeyboard] = useState(false);
 
   const resultText = useMemo(() => (answer === null ? "--" : formatResult(answer)), [answer]);
 
@@ -424,20 +485,17 @@ export default function App() {
     };
   }, [stream]);
 
-  // Ejecuta OCR automatico cada tres segundos mientras la camara esta abierta.
-  useEffect(() => {
-    if (!showCamera || !stream || busy) return undefined;
-    const timer = setInterval(() => captureCamera(true), 3000);
-    return () => clearInterval(timer);
-  }, [showCamera, stream, busy]);
-
   // Solicita permiso y enciende la camara del dispositivo.
   async function openCamera() {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setStatus("La camara requiere HTTPS. En el celular abre la URL publicada por Vercel.");
+      return;
+    }
     try {
       const nextStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       videoRef.current.srcObject = nextStream;
       setStream(nextStream);
-      setPreviewUrl("");
+      setCapturedUrl("");
       setShowCamera(true);
       setAnalysis({ title: "Camara conectada", active: false, done: false });
       setProgress(25);
@@ -452,6 +510,7 @@ export default function App() {
     stream?.getTracks().forEach((track) => track.stop());
     if (videoRef.current) videoRef.current.srcObject = null;
     setStream(null);
+    setCapturedUrl("");
     setShowCamera(false);
     setStatus("Camara apagada.");
   }
@@ -472,35 +531,23 @@ export default function App() {
     if (!file) return;
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
+    setShowImage(true);
     setAnalysis({ title: "Documento cargado para lectura", active: false, done: false });
     setProgress(34);
     setStatus("Imagen cargada. Presiona Escanear para leer la formula.");
   }
 
-  // Ejecuta OCR sobre la imagen o sobre una captura de la camara.
-  async function scan() {
-    if (!previewUrl && !stream) {
-      setStatus("Primero sube una imagen o abre la camara.");
-      return;
-    }
+  // Ejecuta OCR solo despues de que el usuario confirme una imagen.
+  async function scan(source = previewUrl) {
+    if (!source) return;
     setBusy(true);
     setAnalysis({ title: "Leyendo documento importante...", active: true, done: false });
     setProgress(42);
     try {
-      let source = previewUrl;
-      if (!source) {
-        const canvas = document.createElement("canvas");
-        canvas.width = videoRef.current.videoWidth || 1280;
-        canvas.height = videoRef.current.videoHeight || 720;
-        canvas.getContext("2d").drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        source = canvas.toDataURL("image/png");
-      }
-      const result = await Tesseract.recognize(source, "eng", {
-        logger: (event) => {
-          if (event.status === "recognizing text") {
-            setProgress(50 + Math.round(event.progress * 38));
-            setAnalysis({ title: "OCR interpretando simbolos", active: true, done: false });
-          }
+      const result = await recognizeFormula(source, (event) => {
+        if (event.status === "recognizing text") {
+          setProgress(50 + Math.round(event.progress * 38));
+          setAnalysis({ title: "OCR interpretando simbolos", active: true, done: false });
         }
       });
       const detected = cleanExpression(result.data.text);
@@ -509,6 +556,8 @@ export default function App() {
       setAnalysis({ title: "Formula detectada", active: false, done: false });
       setProgress(88);
       setStatus(`Formula detectada: ${detected}. Puedes editarla y generar el arbol.`);
+      setShowImage(false);
+      closeCamera();
     } catch (error) {
       setAnalysis({ title: "Lectura incompleta", active: false, done: false });
       setProgress(18);
@@ -519,33 +568,20 @@ export default function App() {
     }
   }
 
-  // Toma una captura de la camara y la envia al OCR.
-  async function captureCamera(automatic = false) {
-    if (!videoRef.current || !stream || busy) return;
+  // Captura una fotografia pero espera confirmacion antes de escanear.
+  function capturePhoto() {
+    if (!videoRef.current || !stream) return;
     const canvas = document.createElement("canvas");
     canvas.width = videoRef.current.videoWidth || 1280;
     canvas.height = videoRef.current.videoHeight || 720;
     canvas.getContext("2d").drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    setCapturedUrl(canvas.toDataURL("image/png"));
+    setStatus('Fotografia capturada. Presiona "Escanear foto" para analizarla.');
+  }
 
-    setBusy(true);
-    setAnalysis({ title: automatic ? "Escaneo automatico en curso..." : "Analizando captura...", active: true, done: false });
-    setProgress(42);
-    try {
-      const result = await Tesseract.recognize(canvas.toDataURL("image/png"), "eng");
-      const detected = cleanExpression(result.data.text);
-      if (!detected) throw new Error("Todavia no se detecta una formula clara.");
-      setExpression(detected);
-      setAnalysis({ title: "Formula detectada", active: false, done: false });
-      setProgress(88);
-      setStatus(`Formula detectada: ${detected}. Puedes editarla antes de generar el arbol.`);
-      closeCamera();
-    } catch (error) {
-      setAnalysis({ title: "Buscando una formula clara", active: false, done: false });
-      setProgress(28);
-      setStatus(error.message);
-    } finally {
-      setBusy(false);
-    }
+  function retakePhoto() {
+    setCapturedUrl("");
+    setStatus("Camara abierta. Apunta hacia la formula.");
   }
 
   // Convierte la formula escrita en un arbol y abre la ventana de resultado.
@@ -625,12 +661,11 @@ export default function App() {
             </button>
           </header>
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="mt-4 grid grid-cols-2 gap-3">
             <button className="rounded-xl bg-teal-700 px-3 py-4 font-black text-white shadow-lg" onClick={openCamera}>
               Camara
             </button>
-            <button className="rounded-xl bg-emerald-700 px-3 py-3 font-black text-white shadow-lg disabled:opacity-60" onClick={scan} disabled={busy}>{busy ? "Leyendo" : "Escanear"}</button>
-            <button className="rounded-xl bg-blue-700 px-3 py-3 font-black text-white shadow-lg" onClick={() => fileRef.current.click()}>Imagen</button>
+            <button className="rounded-xl bg-blue-700 px-3 py-4 font-black text-white shadow-lg" onClick={() => fileRef.current.click()}>Subir imagen</button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(event) => loadImage(event.target.files[0])} />
           </div>
 
@@ -640,33 +675,37 @@ export default function App() {
 
           <label className="mt-4 block">
             <span className="text-sm font-black text-slate-600">Formula detectada o escrita</span>
-            <input ref={expressionRef} inputMode="decimal" className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-xl font-black shadow-inner outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={expression} onChange={(event) => setExpression(event.target.value)} />
+            <input
+              ref={expressionRef}
+              inputMode="decimal"
+              className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-xl font-black shadow-inner outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              value={expression}
+              onClick={() => setShowKeyboard(true)}
+              onChange={(event) => setExpression(event.target.value)}
+            />
           </label>
 
-          {/* Teclado rapido para ingresar signos matematicos desde el celular. */}
-          <div className="mt-3 grid grid-cols-6 gap-2">
-            {["7", "8", "9", "+", "-", "(",
-              "4", "5", "6", "*", "/", ")",
-              "1", "2", "3", ".", "0", "Borrar"].map((key) => (
-              <button
-                key={key}
-                type="button"
-                className="rounded-lg border border-slate-200 bg-white px-1 py-2 text-sm font-black text-slate-800 shadow-sm"
-                onClick={() => {
-                  if (key === "Borrar") {
-                    setExpression((value) => value.slice(0, -1));
-                  } else {
-                    setExpression((value) => value + key);
-                  }
-                }}
-              >
-                {key}
-              </button>
-            ))}
-          </div>
-          <button type="button" className="mt-2 w-full rounded-lg bg-slate-200 px-3 py-2 text-sm font-black text-slate-700" onClick={() => setExpression("")}>
-            Limpiar formula
-          </button>
+          {showKeyboard ? (
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <strong className="text-sm text-slate-700">Teclado matematico</strong>
+                <button type="button" className="rounded-lg bg-slate-200 px-3 py-1 text-xs font-black text-slate-700" onClick={() => setShowKeyboard(false)}>Ocultar</button>
+              </div>
+              <div className="grid grid-cols-6 gap-2">
+                {["7", "8", "9", "+", "-", "(", "4", "5", "6", "*", "/", ")", "1", "2", "3", ".", "0", "Borrar"].map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="rounded-lg border border-slate-200 bg-white px-1 py-2 text-sm font-black text-slate-800 shadow-sm"
+                    onClick={() => setExpression((value) => key === "Borrar" ? value.slice(0, -1) : value + key)}
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="mt-2 w-full rounded-lg bg-slate-200 px-3 py-2 text-sm font-black text-slate-700" onClick={() => setExpression("")}>Limpiar formula</button>
+            </div>
+          ) : null}
 
           <div className="mt-3 grid grid-cols-3 gap-2">
             {["(4+8)/3", "2+3*4", "(10-2)*(6/3)"].map((item) => (
@@ -683,7 +722,19 @@ export default function App() {
       </div>
 
       {showCamera ? (
-        <CameraModal videoRef={videoRef} analyzing={busy} onClose={closeCamera} onCapture={() => captureCamera(false)} />
+        <CameraModal
+          videoRef={videoRef}
+          capturedUrl={capturedUrl}
+          analyzing={busy}
+          onClose={closeCamera}
+          onCapture={capturePhoto}
+          onScan={() => scan(capturedUrl)}
+          onRetake={retakePhoto}
+        />
+      ) : null}
+
+      {showImage ? (
+        <ImageModal previewUrl={previewUrl} analyzing={busy} onClose={() => setShowImage(false)} onScan={() => scan(previewUrl)} />
       ) : null}
 
       {showTree ? (
