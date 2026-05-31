@@ -1,23 +1,21 @@
-// Cambia la version cuando necesites renovar los archivos guardados.
-const CACHE = "mathtree-v3";
+// Cambia la version para eliminar archivos antiguos del navegador.
+const CACHE = "mathtree-v4";
 
-// Archivos basicos para abrir la aplicacion.
+// Conserva solamente recursos estables.
 const FILES = [
   "/",
   "/manifest.webmanifest",
   "/icon.svg"
 ];
 
-// Guarda los archivos principales al instalar la PWA.
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(FILES))
   );
-
   self.skipWaiting();
 });
 
-// Elimina versiones antiguas del cache.
+// Borra caches anteriores al activar esta version.
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -28,17 +26,28 @@ self.addEventListener("activate", (event) => {
       )
     )
   );
-
   self.clients.claim();
 });
 
-// Usa cache primero y consulta internet cuando el archivo no esta guardado.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
+  // Para abrir la app usa primero la version nueva publicada.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put("/", copy));
+          return response;
+        })
+        .catch(() => caches.match("/"))
+    );
+    return;
+  }
+
+  // Los iconos pueden cargarse desde cache cuando no hay internet.
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request);
-    })
+    caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
 });
