@@ -221,14 +221,14 @@ export default function App() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-3 py-4 text-slate-950 md:px-6">
-      <section className="mx-auto max-w-3xl rounded-3xl border border-white bg-white/95 p-4 shadow-xl md:p-6">
-        <header className="flex items-start justify-between gap-3">
-          <div className="flex gap-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 text-2xl font-black text-teal-300 shadow-lg">+</div>
+    <main className="min-h-dvh bg-white text-slate-950 md:bg-slate-100 md:px-6 md:py-4">
+      <section className="mx-auto max-w-3xl bg-white p-4 md:rounded-3xl md:border md:border-white md:p-6 md:shadow-xl">
+        <header className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-xl font-black text-teal-300 shadow-lg">+</div>
             <div>
-              <p className="text-xs font-black uppercase text-teal-700">MathTree OCR Lab</p>
-              <h1 className="text-2xl font-black leading-tight">Escaner inteligente de formulas</h1>
+              <h1 className="text-xl font-black leading-tight">MathTree OCR</h1>
+              <p className="text-xs font-bold text-teal-700">Escaner de formulas</p>
             </div>
           </div>
           <button className="shrink-0 rounded-xl bg-slate-950 px-3 py-3 text-xs font-black text-white shadow-lg" onClick={installApp}>
