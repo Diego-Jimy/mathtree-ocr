@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import AnalysisPanel from "./components/AnalysisPanel.jsx";
 import CameraModal from "./components/CameraModal.jsx";
 import ImageModal from "./components/ImageModal.jsx";
-import MathKeyboard from "./components/MathKeyboard.jsx";
 import TreeModal from "./components/TreeModal.jsx";
 import { cleanExpression, evaluateTree, formatResult, layoutTree, parseExpression } from "./lib/mathTree.js";
 import { recognizeFormula } from "./lib/ocr.js";
@@ -25,7 +24,6 @@ export default function App() {
   const [imageUrl, setImageUrl] = useState("");
   const [showCamera, setShowCamera] = useState(false);
   const [showImage, setShowImage] = useState(false);
-  const [showKeyboard, setShowKeyboard] = useState(false);
   const [showTree, setShowTree] = useState(false);
   const [tree, setTree] = useState(null);
   const [steps, setSteps] = useState([]);
@@ -161,7 +159,6 @@ export default function App() {
       setSteps(nextSteps);
       setCurrentStep(0);
       setAnswer(nextAnswer);
-      setShowKeyboard(false);
       setShowTree(true);
       setPhase("ARBOL");
       setProgress(100);
@@ -195,16 +192,7 @@ export default function App() {
 
   function editFormula() {
     setShowTree(false);
-    setShowKeyboard(true);
     window.setTimeout(() => inputRef.current?.focus(), 80);
-  }
-
-  function appendKey(key) {
-    if (key === "Borrar") {
-      setExpression((value) => value.slice(0, -1));
-      return;
-    }
-    setExpression((value) => `${value}${key}`);
   }
 
   async function installApp() {
@@ -258,13 +246,11 @@ export default function App() {
           id="formula"
           className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-2xl font-black shadow-inner outline-none ring-teal-500 transition focus:ring-2"
           value={expression}
-          inputMode="decimal"
+          inputMode="text"
           autoComplete="off"
-          onClick={() => setShowKeyboard(true)}
+          spellCheck="false"
           onChange={(event) => setExpression(cleanExpression(event.target.value))}
         />
-
-        {showKeyboard ? <MathKeyboard onKey={appendKey} onClear={() => setExpression("")} onClose={() => setShowKeyboard(false)} /> : null}
 
         <div className="mt-4 grid grid-cols-3 gap-2">
           {EXAMPLES.map((example) => (
