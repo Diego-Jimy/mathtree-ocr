@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  background: #07111f;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+}
+
+.grid-lab {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(20, 184, 166, 0.24) 1px, transparent 0),
+    linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+  background-size: 28px 28px, 44px 44px, 44px 44px;
+}
+
+.scanner-line {
+  animation: scan-line 1.35s ease-in-out infinite;
+}
+
+@keyframes scan-line {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(68vh);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
