@@ -16,6 +16,18 @@ export default function CameraModal({ videoRef, capturedUrl, busy, onClose, onCa
         <div className="relative flex-1 overflow-hidden bg-black">
           <video ref={videoRef} className={`h-full w-full object-cover ${capturedUrl ? "hidden" : "block"}`} autoPlay playsInline muted />
           {capturedUrl ? <img src={capturedUrl} alt="Fotografia capturada" className="h-full w-full object-contain" /> : null}
+          {!capturedUrl ? (
+            <>
+              <div className="pointer-events-none absolute inset-x-[7%] top-[35%] h-[30%] border-2 border-cyan-300 shadow-[0_0_0_9999px_rgba(0,0,0,0.58)]">
+                <span className="absolute -top-8 left-0 rounded-md bg-cyan-300 px-2 py-1 text-xs font-black text-slate-950">
+                  Coloca aqui una sola operacion
+                </span>
+              </div>
+              <p className="pointer-events-none absolute bottom-4 left-0 right-0 px-4 text-center text-sm font-bold text-white">
+                Acerca la formula hasta llenar el recuadro.
+              </p>
+            </>
+          ) : null}
         </div>
 
         <footer className="grid grid-cols-2 gap-3 border-t border-white/10 p-4">

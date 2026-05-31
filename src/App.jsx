@@ -100,10 +100,25 @@ export default function App() {
       setStatus("Espera un momento mientras inicia la camara.");
       return;
     }
+    // Guarda solamente la franja central marcada en la camara.
+    const sourceWidth = video.videoWidth * 0.86;
+    const sourceHeight = video.videoHeight * 0.3;
+    const sourceX = (video.videoWidth - sourceWidth) / 2;
+    const sourceY = (video.videoHeight - sourceHeight) / 2;
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.width = Math.round(sourceWidth);
+    canvas.height = Math.round(sourceHeight);
+    canvas.getContext("2d").drawImage(
+      video,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
     setCapturedUrl(canvas.toDataURL("image/jpeg", 0.95));
     setStatus("Fotografia lista. Confirma con Escanear foto o toma otra.");
   }
@@ -277,7 +292,7 @@ export default function App() {
         />
       ) : null}
 
-      {showImage ? <ImageModal previewUrl={imageUrl} busy={busy} onClose={() => setShowImage(false)} onScan={() => scanSource(imageUrl)} /> : null}
+      {showImage ? <ImageModal previewUrl={imageUrl} busy={busy} onClose={() => setShowImage(false)} onScan={scanSource} /> : null}
 
       {showTree && tree ? (
         <TreeModal
