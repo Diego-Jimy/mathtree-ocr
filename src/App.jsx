@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Tesseract from "tesseract.js";
 
+// Cada nodo guarda un numero u operador del arbol.
 class TreeNode {
   constructor(value, left = null, right = null) {
     this.value = value;
@@ -17,17 +18,19 @@ class TreeNode {
   }
 }
 
+// Normaliza los simbolos que el OCR suele confundir.
 function cleanExpression(text) {
   return String(text || "")
     .replace(/[xX]/g, "*")
     .replace(/,/g, ".")
-    .replace(/÷/g, "/")
-    .replace(/×/g, "*")
-    .replace(/[−–—]/g, "-")
+    .replace(/\u00f7/g, "/")
+    .replace(/\u00d7/g, "*")
+    .replace(/[\u2212\u2013\u2014]/g, "-")
     .replace(/\s+/g, "")
     .replace(/[^0-9+\-*/().]/g, "");
 }
 
+// Separa la expresion en numeros, operadores y parentesis.
 function tokenize(expression) {
   const tokens = [];
   let i = 0;
@@ -56,6 +59,7 @@ function tokenize(expression) {
   return tokens;
 }
 
+// Construye el arbol respetando parentesis y prioridad de operadores.
 function parseExpression(expression) {
   const tokens = tokenize(cleanExpression(expression));
   let position = 0;
@@ -95,6 +99,7 @@ function parseExpression(expression) {
   return root;
 }
 
+// Resuelve el arbol de forma recursiva y registra cada paso.
 function evaluate(node, steps = []) {
   if (!node.isOperator) {
     node.result = Number(node.value);
@@ -117,6 +122,7 @@ function collectNodes(node, nodes = []) {
   return nodes;
 }
 
+// Asigna una posicion visual a cada nodo del arbol.
 function layoutTree(root) {
   let order = 0;
   function walk(node, depth) {
@@ -140,13 +146,14 @@ function round(value) {
   return Number.parseFloat(Number(value).toFixed(6));
 }
 
-function ScannerFrame({ videoRef, previewUrl, analyzing }) {
+// Vista previa de la camara o de una imagen subida.
+function ScannerFrame({ videoRef, previewUrl, analyzing, cameraOn }) {
   return (
     <div className={`relative aspect-[4/3] overflow-hidden rounded-3xl border border-white/15 bg-slate-950 shadow-glow ${analyzing ? "ring-2 ring-cyan-300" : ""}`}>
       <video ref={videoRef} className={`h-full w-full object-cover ${previewUrl ? "hidden" : "block"}`} autoPlay playsInline muted />
       {previewUrl ? <img src={previewUrl} alt="Documento cargado" className="absolute inset-0 h-full w-full object-cover" /> : null}
 
-      {!previewUrl ? (
+      {!previewUrl && !cameraOn ? (
         <div className="absolute inset-0 grid place-items-center text-center text-slate-200">
           <div>
             <img src="/icon.svg" alt="" className="mx-auto mb-4 h-20 w-20 rounded-2xl shadow-2xl" />
@@ -167,6 +174,7 @@ function ScannerFrame({ videoRef, previewUrl, analyzing }) {
   );
 }
 
+// Muestra el avance del proceso: captura, OCR, parser y arbol.
 function AnalysisPanel({ analysis, progress }) {
   const stages = ["Captura", "OCR", "Parser", "Arbol"];
   return (
@@ -189,6 +197,7 @@ function AnalysisPanel({ analysis, progress }) {
   );
 }
 
+// Dibuja el arbol y permite arrastrar o hacer zoom.
 function TreeCanvas({ tree, steps, currentStep, answer }) {
   const canvasRef = useRef(null);
   const viewRef = useRef({ scale: 1, x: 0, y: 0, dragging: false, sx: 0, sy: 0, ox: 0, oy: 0 });
@@ -321,9 +330,30 @@ export default function App() {
   const [analysis, setAnalysis] = useState({ title: "Esperando documento", active: false, done: false });
   const [progress, setProgress] = useState(8);
   const [busy, setBusy] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [showTree, setShowTree] = useState(false);
 
   const resultText = useMemo(() => (answer === null ? "--" : round(answer)), [answer]);
 
+  // Guarda el aviso de instalacion de Chrome para usarlo desde el boton.
+  useEffect(() => {
+    function handleInstallPrompt(event) {
+      event.preventDefault();
+      setInstallPrompt(event);
+    }
+
+    window.addEventListener("beforeinstallprompt", handleInstallPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", handleInstallPrompt);
+  }, []);
+
+  // Apaga la camara si el usuario cierra la aplicacion.
+  useEffect(() => {
+    return () => {
+      stream?.getTracks().forEach((track) => track.stop());
+    };
+  }, [stream]);
+
+  // Solicita permiso y enciende la camara del dispositivo.
   async function openCamera() {
     try {
       const nextStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
@@ -338,6 +368,26 @@ export default function App() {
     }
   }
 
+  // Detiene todas las pistas de video activas.
+  function closeCamera() {
+    stream?.getTracks().forEach((track) => track.stop());
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setStream(null);
+    setStatus("Camara apagada.");
+  }
+
+  // Muestra la instalacion PWA cuando el navegador la permite.
+  async function installApp() {
+    if (!installPrompt) {
+      setStatus('Para instalar: abre el menu del navegador y elige "Instalar app" o "Agregar a pantalla principal".');
+      return;
+    }
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
+  }
+
+  // Carga una fotografia para que el OCR pueda leerla.
   function loadImage(file) {
     if (!file) return;
     const url = URL.createObjectURL(file);
@@ -347,6 +397,7 @@ export default function App() {
     setStatus("Imagen cargada. Presiona Escanear para leer la formula.");
   }
 
+  // Ejecuta OCR sobre la imagen o sobre una captura de la camara.
   async function scan() {
     if (!previewUrl && !stream) {
       setStatus("Primero sube una imagen o abre la camara.");
@@ -388,6 +439,7 @@ export default function App() {
     }
   }
 
+  // Convierte la formula escrita en un arbol y abre la ventana de resultado.
   function buildTree() {
     try {
       const clean = cleanExpression(expression);
@@ -400,6 +452,7 @@ export default function App() {
       setSteps(nextSteps);
       setCurrentStep(0);
       setAnswer(result);
+      setShowTree(true);
       setAnalysis({ title: "Formula convertida en arbol", active: false, done: true });
       setProgress(100);
       setStatus(`Arbol generado para: ${clean}`);
@@ -434,7 +487,7 @@ export default function App() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_12%_10%,rgba(20,184,166,0.28),transparent_28%),radial-gradient(circle_at_90%_0%,rgba(37,99,235,0.22),transparent_32%),linear-gradient(180deg,#f8fafc,#e2e8f0)] p-3 text-slate-950 md:p-5">
-      <div className="mx-auto grid min-h-[calc(100vh-40px)] max-w-[1500px] gap-4 lg:grid-cols-[460px_minmax(0,1fr)]">
+      <div className="mx-auto max-w-2xl">
         <section className="rounded-3xl border border-white/70 bg-white/80 p-5 shadow-panel backdrop-blur-2xl">
           <header className="mb-5 flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
@@ -444,13 +497,20 @@ export default function App() {
                 <h1 className="text-2xl font-black leading-tight">Escaner inteligente de formulas</h1>
               </div>
             </div>
-            <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black uppercase text-cyan-100">React</span>
+            <button
+              className="shrink-0 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black uppercase text-cyan-100 shadow-lg"
+              onClick={installApp}
+            >
+              Instalar app
+            </button>
           </header>
 
-          <ScannerFrame videoRef={videoRef} previewUrl={previewUrl} analyzing={analysis.active} />
+          <ScannerFrame videoRef={videoRef} previewUrl={previewUrl} analyzing={analysis.active} cameraOn={Boolean(stream)} />
 
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <button className="rounded-xl bg-teal-700 px-3 py-3 font-black text-white shadow-lg" onClick={openCamera}>Camara</button>
+            <button className="rounded-xl bg-teal-700 px-3 py-3 font-black text-white shadow-lg" onClick={stream ? closeCamera : openCamera}>
+              {stream ? "Apagar" : "Camara"}
+            </button>
             <button className="rounded-xl bg-slate-950 px-3 py-3 font-black text-white shadow-lg disabled:opacity-60" onClick={scan} disabled={busy}>{busy ? "Leyendo" : "Escanear"}</button>
             <button className="rounded-xl bg-blue-700 px-3 py-3 font-black text-white shadow-lg" onClick={() => fileRef.current.click()}>Imagen</button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(event) => loadImage(event.target.files[0])} />
@@ -471,32 +531,48 @@ export default function App() {
             ))}
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <button className="rounded-xl bg-emerald-700 px-3 py-3 font-black text-white shadow-lg" onClick={buildTree}>Generar</button>
-            <button className="rounded-xl bg-amber-600 px-3 py-3 font-black text-white shadow-lg" onClick={play}>Play</button>
-            <button className="rounded-xl bg-orange-700 px-3 py-3 font-black text-white shadow-lg" onClick={nextStep}>Paso</button>
-          </div>
+          <button className="mt-4 w-full rounded-xl bg-emerald-700 px-3 py-4 text-lg font-black text-white shadow-lg" onClick={buildTree}>
+            Generar arbol visual
+          </button>
 
           <p className="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-4 font-bold text-slate-600">{status}</p>
         </section>
-
-        <section className="overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-panel">
-          <div className="flex items-center justify-between border-b border-slate-200 bg-white/80 px-5 py-4">
-            <div>
-              <p className="text-xs font-black uppercase text-slate-500">Resultado</p>
-              <strong className="text-4xl font-black text-slate-950">{resultText}</strong>
-            </div>
-            <div className="text-right">
-              <p className="text-xs font-black uppercase text-slate-500">Paso actual</p>
-              <strong className="text-3xl font-black text-slate-950">{currentStep}/{steps.length}</strong>
-            </div>
-          </div>
-          <div className="grid-lab relative min-h-[640px]">
-            <div className="pointer-events-none absolute bottom-6 right-6 text-7xl font-black text-slate-900/5">TREE VIEW</div>
-            <TreeCanvas tree={tree} steps={steps} currentStep={currentStep} answer={answer} />
-          </div>
-        </section>
       </div>
+
+      {showTree ? (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 p-3 backdrop-blur-sm md:p-6">
+          <section className="mx-auto flex h-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+              <div>
+                <p className="text-xs font-black uppercase text-slate-500">Resultado final</p>
+                <strong className="text-4xl font-black text-slate-950">{resultText}</strong>
+              </div>
+              <div className="text-right">
+                <p className="text-xs font-black uppercase text-slate-500">Paso actual</p>
+                <strong className="text-2xl font-black text-slate-950">{currentStep}/{steps.length}</strong>
+              </div>
+              <button className="rounded-xl bg-slate-950 px-4 py-3 font-black text-white" onClick={() => setShowTree(false)}>
+                Cerrar
+              </button>
+            </div>
+
+            <div className="grid-lab relative flex-1 overflow-hidden">
+              <div className="pointer-events-none absolute bottom-6 right-6 text-6xl font-black text-slate-900/5">TREE VIEW</div>
+              <TreeCanvas tree={tree} steps={steps} currentStep={currentStep} answer={answer} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 border-t border-slate-200 p-4">
+              <button className="rounded-xl bg-amber-600 px-3 py-3 font-black text-white" onClick={play}>
+                Play
+              </button>
+              <button className="rounded-xl bg-orange-700 px-3 py-3 font-black text-white" onClick={nextStep}>
+                Siguiente paso
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
+
