@@ -152,30 +152,41 @@ function formatResult(value) {
   return Number.isInteger(rounded) ? rounded.toFixed(1) : String(rounded);
 }
 
-// Vista previa de la camara o de una imagen subida.
-function ScannerFrame({ videoRef, previewUrl, analyzing, cameraOn }) {
+// Ventana flotante que muestra la camara solo cuando el usuario la necesita.
+function CameraModal({ videoRef, analyzing, onClose, onCapture }) {
   return (
-    <div className={`relative aspect-[4/3] overflow-hidden rounded-3xl border border-white/15 bg-slate-950 shadow-glow ${analyzing ? "ring-2 ring-cyan-300" : ""}`}>
-      <video ref={videoRef} className={`h-full w-full object-cover ${previewUrl ? "hidden" : "block"}`} autoPlay playsInline muted />
-      {previewUrl ? <img src={previewUrl} alt="Documento cargado" className="absolute inset-0 h-full w-full object-cover" /> : null}
-
-      {!previewUrl && !cameraOn ? (
-        <div className="absolute inset-0 grid place-items-center text-center text-slate-200">
+    <div className="modal-backdrop fixed inset-0 z-50 bg-slate-950/90 p-3 backdrop-blur-sm md:p-6">
+      <section className="tree-modal mx-auto flex h-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-slate-950 shadow-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-4 text-white">
           <div>
-            <img src="/icon.svg" alt="" className="mx-auto mb-4 h-20 w-20 rounded-2xl shadow-2xl" />
-            <p className="text-xl font-black">Centro de escaneo listo</p>
-            <p className="mt-2 text-sm text-slate-400">Usa camara o sube una imagen de tu ejercicio.</p>
+            <p className="text-xs font-black uppercase text-cyan-300">Camara OCR</p>
+            <h2 className="text-xl font-black">Apunta hacia la formula</h2>
+          </div>
+          <button className="rounded-full bg-white px-4 py-2 font-black text-slate-950" onClick={onClose}>
+            Cerrar X
+          </button>
+        </div>
+
+        <div className="relative flex-1 overflow-hidden bg-black">
+          <video ref={videoRef} className="h-full w-full object-cover" autoPlay playsInline muted />
+          <div className="absolute inset-6 border border-cyan-200/40">
+            <span className="absolute -left-px -top-px h-12 w-12 border-l-4 border-t-4 border-cyan-300" />
+            <span className="absolute -right-px -top-px h-12 w-12 border-r-4 border-t-4 border-cyan-300" />
+            <span className="absolute -bottom-px -left-px h-12 w-12 border-b-4 border-l-4 border-cyan-300" />
+            <span className="absolute -bottom-px -right-px h-12 w-12 border-b-4 border-r-4 border-cyan-300" />
+            <span className="scanner-line absolute left-4 right-4 top-6 h-0.5 bg-gradient-to-r from-transparent via-cyan-200 to-transparent shadow-[0_0_20px_rgba(103,232,249,0.9)]" />
+          </div>
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-slate-950/75 px-4 py-2 text-xs font-black uppercase text-cyan-100">
+            {analyzing ? "Leyendo formula..." : "Escaneo automatico activo"}
           </div>
         </div>
-      ) : null}
 
-      <div className="absolute inset-5 border border-cyan-200/30">
-        <span className="absolute -left-px -top-px h-10 w-10 border-l-4 border-t-4 border-cyan-300" />
-        <span className="absolute -right-px -top-px h-10 w-10 border-r-4 border-t-4 border-cyan-300" />
-        <span className="absolute -bottom-px -left-px h-10 w-10 border-b-4 border-l-4 border-cyan-300" />
-        <span className="absolute -bottom-px -right-px h-10 w-10 border-b-4 border-r-4 border-cyan-300" />
-        {analyzing ? <span className="scanner-line absolute left-4 right-4 top-6 h-0.5 bg-gradient-to-r from-transparent via-cyan-200 to-transparent shadow-[0_0_20px_rgba(103,232,249,0.9)]" /> : null}
-      </div>
+        <div className="border-t border-white/10 bg-slate-950 p-4">
+          <button className="w-full rounded-xl bg-emerald-600 px-4 py-4 text-lg font-black text-white shadow-lg disabled:opacity-60" onClick={onCapture} disabled={analyzing}>
+            {analyzing ? "Procesando OCR..." : "Capturar y analizar ahora"}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -391,6 +402,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showTree, setShowTree] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
 
   const resultText = useMemo(() => (answer === null ? "--" : formatResult(answer)), [answer]);
 
@@ -412,6 +424,13 @@ export default function App() {
     };
   }, [stream]);
 
+  // Ejecuta OCR automatico cada tres segundos mientras la camara esta abierta.
+  useEffect(() => {
+    if (!showCamera || !stream || busy) return undefined;
+    const timer = setInterval(() => captureCamera(true), 3000);
+    return () => clearInterval(timer);
+  }, [showCamera, stream, busy]);
+
   // Solicita permiso y enciende la camara del dispositivo.
   async function openCamera() {
     try {
@@ -419,6 +438,7 @@ export default function App() {
       videoRef.current.srcObject = nextStream;
       setStream(nextStream);
       setPreviewUrl("");
+      setShowCamera(true);
       setAnalysis({ title: "Camara conectada", active: false, done: false });
       setProgress(25);
       setStatus("Camara abierta. Enfoca la formula y presiona Escanear.");
@@ -432,6 +452,7 @@ export default function App() {
     stream?.getTracks().forEach((track) => track.stop());
     if (videoRef.current) videoRef.current.srcObject = null;
     setStream(null);
+    setShowCamera(false);
     setStatus("Camara apagada.");
   }
 
@@ -493,6 +514,35 @@ export default function App() {
       setProgress(18);
       setStatus(error.message);
       navigator.vibrate?.([80, 40, 80]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Toma una captura de la camara y la envia al OCR.
+  async function captureCamera(automatic = false) {
+    if (!videoRef.current || !stream || busy) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = videoRef.current.videoWidth || 1280;
+    canvas.height = videoRef.current.videoHeight || 720;
+    canvas.getContext("2d").drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+
+    setBusy(true);
+    setAnalysis({ title: automatic ? "Escaneo automatico en curso..." : "Analizando captura...", active: true, done: false });
+    setProgress(42);
+    try {
+      const result = await Tesseract.recognize(canvas.toDataURL("image/png"), "eng");
+      const detected = cleanExpression(result.data.text);
+      if (!detected) throw new Error("Todavia no se detecta una formula clara.");
+      setExpression(detected);
+      setAnalysis({ title: "Formula detectada", active: false, done: false });
+      setProgress(88);
+      setStatus(`Formula detectada: ${detected}. Puedes editarla antes de generar el arbol.`);
+      closeCamera();
+    } catch (error) {
+      setAnalysis({ title: "Buscando una formula clara", active: false, done: false });
+      setProgress(28);
+      setStatus(error.message);
     } finally {
       setBusy(false);
     }
@@ -575,11 +625,9 @@ export default function App() {
             </button>
           </header>
 
-          <ScannerFrame videoRef={videoRef} previewUrl={previewUrl} analyzing={analysis.active} cameraOn={Boolean(stream)} />
-
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <button className="rounded-xl bg-teal-700 px-3 py-3 font-black text-white shadow-lg" onClick={stream ? closeCamera : openCamera}>
-              {stream ? "Apagar" : "Camara"}
+            <button className="rounded-xl bg-teal-700 px-3 py-4 font-black text-white shadow-lg" onClick={openCamera}>
+              Camara
             </button>
             <button className="rounded-xl bg-emerald-700 px-3 py-3 font-black text-white shadow-lg disabled:opacity-60" onClick={scan} disabled={busy}>{busy ? "Leyendo" : "Escanear"}</button>
             <button className="rounded-xl bg-blue-700 px-3 py-3 font-black text-white shadow-lg" onClick={() => fileRef.current.click()}>Imagen</button>
@@ -592,8 +640,33 @@ export default function App() {
 
           <label className="mt-4 block">
             <span className="text-sm font-black text-slate-600">Formula detectada o escrita</span>
-            <input ref={expressionRef} className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-xl font-black shadow-inner outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={expression} onChange={(event) => setExpression(event.target.value)} />
+            <input ref={expressionRef} inputMode="decimal" className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-xl font-black shadow-inner outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={expression} onChange={(event) => setExpression(event.target.value)} />
           </label>
+
+          {/* Teclado rapido para ingresar signos matematicos desde el celular. */}
+          <div className="mt-3 grid grid-cols-6 gap-2">
+            {["7", "8", "9", "+", "-", "(",
+              "4", "5", "6", "*", "/", ")",
+              "1", "2", "3", ".", "0", "Borrar"].map((key) => (
+              <button
+                key={key}
+                type="button"
+                className="rounded-lg border border-slate-200 bg-white px-1 py-2 text-sm font-black text-slate-800 shadow-sm"
+                onClick={() => {
+                  if (key === "Borrar") {
+                    setExpression((value) => value.slice(0, -1));
+                  } else {
+                    setExpression((value) => value + key);
+                  }
+                }}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="mt-2 w-full rounded-lg bg-slate-200 px-3 py-2 text-sm font-black text-slate-700" onClick={() => setExpression("")}>
+            Limpiar formula
+          </button>
 
           <div className="mt-3 grid grid-cols-3 gap-2">
             {["(4+8)/3", "2+3*4", "(10-2)*(6/3)"].map((item) => (
@@ -608,6 +681,10 @@ export default function App() {
           <p className="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-4 font-bold text-slate-600">{status}</p>
         </section>
       </div>
+
+      {showCamera ? (
+        <CameraModal videoRef={videoRef} analyzing={busy} onClose={closeCamera} onCapture={() => captureCamera(false)} />
+      ) : null}
 
       {showTree ? (
         <div className="modal-backdrop fixed inset-0 z-50 bg-slate-950/85 p-0 backdrop-blur-sm md:p-5">

@@ -22,12 +22,11 @@ body {
   background-size: 28px 28px, 44px 44px, 44px 44px;
 }
 
-/* Linea animada que simula la lectura del documento. */
+/* Linea vertical que simula el escaneo automatico. */
 .scanner-line {
   animation: scan-line 1.35s ease-in-out infinite;
 }
 
-/* Entrada suave de la ventana del arbol. */
 .modal-backdrop {
   animation: backdrop-in 180ms ease-out;
 }
@@ -36,7 +35,6 @@ body {
   animation: modal-in 220ms ease-out;
 }
 
-/* Destaca el resultado cuando se abre la ventana. */
 .result-pop {
   display: inline-block;
   animation: result-pop 420ms ease-out;
