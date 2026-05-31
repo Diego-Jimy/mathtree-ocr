@@ -9,50 +9,27 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
-  font-family: Inter, Roboto, ui-sans-serif, system-ui, sans-serif;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* Cuadricula sutil para el lienzo del arbol. */
 .grid-lab {
-  background-color: #f8f9fa;
+  background-color: #f8fafc;
   background-image:
-    radial-gradient(circle at 1px 1px, rgba(79, 195, 247, 0.28) 1px, transparent 0),
-    linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+    radial-gradient(circle at 1px 1px, rgba(20, 184, 166, 0.18) 1px, transparent 0),
+    linear-gradient(rgba(148, 163, 184, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.1) 1px, transparent 1px);
   background-size: 28px 28px, 44px 44px, 44px 44px;
 }
 
-/* Linea vertical que simula el escaneo automatico. */
-.scanner-line {
-  animation: scan-line 1.35s ease-in-out infinite;
-}
-
 .modal-backdrop {
-  animation: backdrop-in 180ms ease-out;
+  animation: modal-fade 180ms ease-out;
 }
 
 .tree-modal {
-  animation: modal-in 220ms ease-out;
+  animation: modal-zoom 220ms ease-out;
 }
 
-.result-pop {
-  display: inline-block;
-  animation: result-pop 420ms ease-out;
-}
-
-@keyframes scan-line {
-  0% {
-    top: 8%;
-  }
-  50% {
-    top: 88%;
-  }
-  100% {
-    top: 8%;
-  }
-}
-
-@keyframes backdrop-in {
+@keyframes modal-fade {
   from {
     opacity: 0;
   }
@@ -61,26 +38,12 @@ body {
   }
 }
 
-@keyframes modal-in {
+@keyframes modal-zoom {
   from {
     opacity: 0;
     transform: scale(0.97);
   }
   to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes result-pop {
-  0% {
-    opacity: 0;
-    transform: scale(0.85);
-  }
-  70% {
-    transform: scale(1.08);
-  }
-  100% {
     opacity: 1;
     transform: scale(1);
   }
