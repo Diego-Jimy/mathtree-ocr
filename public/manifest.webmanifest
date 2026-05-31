@@ -1,8 +1,11 @@
 {
+  "id": "/",
   "name": "MathTree OCR",
   "short_name": "MathTree",
-  "description": "Escaner visual de expresiones matematicas con React y Tailwind.",
+  "description": "Escaner visual de expresiones matematicas con OCR, arbol binario y resolucion paso a paso.",
+  "lang": "es",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#07111f",
   "theme_color": "#07111f",

@@ -1,13 +1,14 @@
-const CACHE = "mathtree-v2";
+// Cambia la version cuando necesites renovar los archivos guardados.
+const CACHE = "mathtree-v3";
 
+// Archivos basicos para abrir la aplicacion.
 const FILES = [
   "/",
-  "/icon.svg",
-  "/icon-192.png",
-  "/icon-512.png",
-  "/manifest.webmanifest"
+  "/manifest.webmanifest",
+  "/icon.svg"
 ];
 
+// Guarda los archivos principales al instalar la PWA.
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(FILES))
@@ -16,6 +17,7 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
+// Elimina versiones antiguas del cache.
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -30,6 +32,7 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Usa cache primero y consulta internet cuando el archivo no esta guardado.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
