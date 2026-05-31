@@ -9,28 +9,81 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
+  font-family: Inter, Roboto, ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Cuadricula sutil para el lienzo del arbol. */
 .grid-lab {
+  background-color: #f8f9fa;
   background-image:
-    radial-gradient(circle at 1px 1px, rgba(20, 184, 166, 0.24) 1px, transparent 0),
+    radial-gradient(circle at 1px 1px, rgba(79, 195, 247, 0.28) 1px, transparent 0),
     linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
     linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
   background-size: 28px 28px, 44px 44px, 44px 44px;
 }
 
+/* Linea animada que simula la lectura del documento. */
 .scanner-line {
   animation: scan-line 1.35s ease-in-out infinite;
 }
 
+/* Entrada suave de la ventana del arbol. */
+.modal-backdrop {
+  animation: backdrop-in 180ms ease-out;
+}
+
+.tree-modal {
+  animation: modal-in 220ms ease-out;
+}
+
+/* Destaca el resultado cuando se abre la ventana. */
+.result-pop {
+  display: inline-block;
+  animation: result-pop 420ms ease-out;
+}
+
 @keyframes scan-line {
   0% {
-    transform: translateY(0);
+    top: 8%;
   }
   50% {
-    transform: translateY(68vh);
+    top: 88%;
   }
   100% {
-    transform: translateY(0);
+    top: 8%;
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes result-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
   }
 }

@@ -128,8 +128,8 @@ function layoutTree(root) {
   function walk(node, depth) {
     if (!node) return;
     walk(node.left, depth + 1);
-    node.x = order * 110;
-    node.y = depth * 118;
+    node.x = order * 138;
+    node.y = depth * 148;
     order += 1;
     walk(node.right, depth + 1);
   }
@@ -144,6 +144,12 @@ function layoutTree(root) {
 
 function round(value) {
   return Number.parseFloat(Number(value).toFixed(6));
+}
+
+// Mantiene un decimal visible para resultados enteros, por ejemplo: 4.0.
+function formatResult(value) {
+  const rounded = round(value);
+  return Number.isInteger(rounded) ? rounded.toFixed(1) : String(rounded);
 }
 
 // Vista previa de la camara o de una imagen subida.
@@ -200,7 +206,25 @@ function AnalysisPanel({ analysis, progress }) {
 // Dibuja el arbol y permite arrastrar o hacer zoom.
 function TreeCanvas({ tree, steps, currentStep, answer }) {
   const canvasRef = useRef(null);
-  const viewRef = useRef({ scale: 1, x: 0, y: 0, dragging: false, sx: 0, sy: 0, ox: 0, oy: 0 });
+  const viewRef = useRef({
+    scale: 1,
+    x: 0,
+    y: 0,
+    dragging: false,
+    sx: 0,
+    sy: 0,
+    ox: 0,
+    oy: 0,
+    pinchDistance: 0,
+    pinchScale: 1
+  });
+  const pointersRef = useRef(new Map());
+
+  function pointerDistance() {
+    const pointers = [...pointersRef.current.values()];
+    if (pointers.length < 2) return 0;
+    return Math.hypot(pointers[0].x - pointers[1].x, pointers[0].y - pointers[1].y);
+  }
 
   function draw() {
     const canvas = canvasRef.current;
@@ -226,10 +250,10 @@ function TreeCanvas({ tree, steps, currentStep, answer }) {
       [node.left, node.right].forEach((child) => {
         if (!child) return;
         ctx.beginPath();
-        ctx.moveTo(node.x, node.y + 32);
-        ctx.lineTo(child.x, child.y - 32);
-        ctx.strokeStyle = "#94a3b8";
-        ctx.lineWidth = 4;
+        ctx.moveTo(node.x, node.y + 39);
+        ctx.lineTo(child.x, child.y - 39);
+        ctx.strokeStyle = "#9aaac0";
+        ctx.lineWidth = 5;
         ctx.stroke();
         drawLines(child);
       });
@@ -241,21 +265,27 @@ function TreeCanvas({ tree, steps, currentStep, answer }) {
       const isActive = activeIds.has(node.id);
       const isDone = resolvedIds.has(node.id);
       ctx.beginPath();
-      ctx.arc(node.x, node.y, isActive ? 37 : 32, 0, Math.PI * 2);
-      ctx.fillStyle = node.isOperator ? "#0f766e" : "#ffffff";
+      const radius = isActive ? 45 : 39;
+      ctx.save();
+      ctx.shadowColor = "rgba(15, 23, 42, 0.18)";
+      ctx.shadowBlur = 14;
+      ctx.shadowOffsetY = 6;
+      ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = node.isOperator ? "#172033" : "#ffffff";
       ctx.fill();
+      ctx.restore();
       ctx.lineWidth = isActive ? 7 : 4;
-      ctx.strokeStyle = isActive ? "#f59e0b" : isDone ? "#22c55e" : node.isOperator ? "#0f766e" : "#334155";
+      ctx.strokeStyle = isActive ? "#22c55e" : isDone ? "#16a34a" : node.isOperator ? "#ff9800" : "#4fc3f7";
       ctx.stroke();
-      ctx.fillStyle = node.isOperator ? "#ffffff" : "#0f172a";
-      ctx.font = "800 20px Inter, sans-serif";
+      ctx.fillStyle = node.isOperator ? "#ffb74d" : "#0369a1";
+      ctx.font = "800 22px Inter, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(node.value, node.x, node.y);
       if ((isActive || isDone) && node.result !== null) {
         ctx.fillStyle = isDone ? "#15803d" : "#b45309";
         ctx.font = "800 13px Inter, sans-serif";
-        ctx.fillText(`= ${round(node.result)}`, node.x, node.y + 51);
+        ctx.fillText(`= ${formatResult(node.result)}`, node.x, node.y + 60);
       }
       drawNode(node.right);
     }
@@ -274,12 +304,12 @@ function TreeCanvas({ tree, steps, currentStep, answer }) {
     if (answer !== null) {
       ctx.fillStyle = "#07111f";
       ctx.beginPath();
-      ctx.roundRect(18, 18, 320, 58, 16);
+      ctx.roundRect(18, 18, 340, 62, 16);
       ctx.fill();
       ctx.fillStyle = "#ecfeff";
-      ctx.font = "900 19px Inter, sans-serif";
+      ctx.font = "900 20px Inter, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(`${currentStep >= steps.length && steps.length ? "Respuesta final" : "Resultado"}: ${round(answer)}`, 178, 48);
+      ctx.fillText(`${currentStep >= steps.length && steps.length ? "Respuesta final" : "Resultado"}: ${formatResult(answer)}`, 188, 50);
     }
   }
 
@@ -296,15 +326,43 @@ function TreeCanvas({ tree, steps, currentStep, answer }) {
       className="h-full min-h-[580px] w-full touch-none"
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
-        Object.assign(viewRef.current, { dragging: true, sx: event.clientX, sy: event.clientY, ox: viewRef.current.x, oy: viewRef.current.y });
+        pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (pointersRef.current.size === 2) {
+          viewRef.current.pinchDistance = pointerDistance();
+          viewRef.current.pinchScale = viewRef.current.scale;
+          viewRef.current.dragging = false;
+          return;
+        }
+        Object.assign(viewRef.current, {
+          dragging: true,
+          sx: event.clientX,
+          sy: event.clientY,
+          ox: viewRef.current.x,
+          oy: viewRef.current.y
+        });
       }}
       onPointerMove={(event) => {
+        if (pointersRef.current.has(event.pointerId)) {
+          pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        }
+        if (pointersRef.current.size === 2) {
+          const distance = pointerDistance();
+          const initialDistance = viewRef.current.pinchDistance || distance;
+          viewRef.current.scale = Math.max(0.45, Math.min(2.8, viewRef.current.pinchScale * (distance / initialDistance)));
+          draw();
+          return;
+        }
         if (!viewRef.current.dragging) return;
         viewRef.current.x = viewRef.current.ox + event.clientX - viewRef.current.sx;
         viewRef.current.y = viewRef.current.oy + event.clientY - viewRef.current.sy;
         draw();
       }}
       onPointerUp={() => {
+        pointersRef.current.clear();
+        viewRef.current.dragging = false;
+      }}
+      onPointerCancel={() => {
+        pointersRef.current.clear();
         viewRef.current.dragging = false;
       }}
       onWheel={(event) => {
@@ -319,6 +377,7 @@ function TreeCanvas({ tree, steps, currentStep, answer }) {
 export default function App() {
   const videoRef = useRef(null);
   const fileRef = useRef(null);
+  const expressionRef = useRef(null);
   const [stream, setStream] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [expression, setExpression] = useState("(4+8)/3");
@@ -333,7 +392,7 @@ export default function App() {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showTree, setShowTree] = useState(false);
 
-  const resultText = useMemo(() => (answer === null ? "--" : round(answer)), [answer]);
+  const resultText = useMemo(() => (answer === null ? "--" : formatResult(answer)), [answer]);
 
   // Guarda el aviso de instalacion de Chrome para usarlo desde el boton.
   useEffect(() => {
@@ -474,6 +533,17 @@ export default function App() {
     setCurrentStep((value) => Math.min(value + 1, steps.length));
   }
 
+  // Regresa la animacion al inicio sin borrar el arbol.
+  function resetSteps() {
+    setCurrentStep(0);
+  }
+
+  // Cierra la ventana para corregir la formula manualmente.
+  function editExpression() {
+    setShowTree(false);
+    setTimeout(() => expressionRef.current?.focus(), 0);
+  }
+
   function play() {
     if (!steps.length) return;
     let index = 0;
@@ -511,7 +581,7 @@ export default function App() {
             <button className="rounded-xl bg-teal-700 px-3 py-3 font-black text-white shadow-lg" onClick={stream ? closeCamera : openCamera}>
               {stream ? "Apagar" : "Camara"}
             </button>
-            <button className="rounded-xl bg-slate-950 px-3 py-3 font-black text-white shadow-lg disabled:opacity-60" onClick={scan} disabled={busy}>{busy ? "Leyendo" : "Escanear"}</button>
+            <button className="rounded-xl bg-emerald-700 px-3 py-3 font-black text-white shadow-lg disabled:opacity-60" onClick={scan} disabled={busy}>{busy ? "Leyendo" : "Escanear"}</button>
             <button className="rounded-xl bg-blue-700 px-3 py-3 font-black text-white shadow-lg" onClick={() => fileRef.current.click()}>Imagen</button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(event) => loadImage(event.target.files[0])} />
           </div>
@@ -522,7 +592,7 @@ export default function App() {
 
           <label className="mt-4 block">
             <span className="text-sm font-black text-slate-600">Formula detectada o escrita</span>
-            <input className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-xl font-black shadow-inner outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={expression} onChange={(event) => setExpression(event.target.value)} />
+            <input ref={expressionRef} className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-xl font-black shadow-inner outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={expression} onChange={(event) => setExpression(event.target.value)} />
           </label>
 
           <div className="mt-3 grid grid-cols-3 gap-2">
@@ -540,33 +610,52 @@ export default function App() {
       </div>
 
       {showTree ? (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 p-3 backdrop-blur-sm md:p-6">
-          <section className="mx-auto flex h-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-              <div>
-                <p className="text-xs font-black uppercase text-slate-500">Resultado final</p>
-                <strong className="text-4xl font-black text-slate-950">{resultText}</strong>
+        <div className="modal-backdrop fixed inset-0 z-50 bg-slate-950/85 p-0 backdrop-blur-sm md:p-5">
+          <section className="tree-modal mx-auto flex h-full max-w-6xl flex-col overflow-hidden bg-white shadow-2xl md:rounded-3xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 md:px-6">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase text-teal-700">Arbol de expresion</p>
+                <h2 className="truncate text-lg font-black text-slate-950 md:text-2xl">{expression}</h2>
               </div>
-              <div className="text-right">
-                <p className="text-xs font-black uppercase text-slate-500">Paso actual</p>
-                <strong className="text-2xl font-black text-slate-950">{currentStep}/{steps.length}</strong>
-              </div>
-              <button className="rounded-xl bg-slate-950 px-4 py-3 font-black text-white" onClick={() => setShowTree(false)}>
-                Cerrar
+              <button
+                className="shrink-0 rounded-full bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-lg"
+                onClick={() => setShowTree(false)}
+                aria-label="Cerrar ventana del arbol"
+              >
+                Cerrar X
               </button>
             </div>
 
-            <div className="grid-lab relative flex-1 overflow-hidden">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-950 px-4 py-3 text-white md:px-6">
+              <div>
+                <p className="text-xs font-black uppercase text-emerald-300">Resultado final</p>
+                <strong className="result-pop text-4xl font-black text-emerald-400 md:text-5xl">{resultText}</strong>
+              </div>
+              <div className="min-w-[150px] text-right">
+                <p className="text-xs font-black uppercase text-slate-300">Paso actual: {currentStep} de {steps.length}</p>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-700">
+                  <div className="h-full rounded-full bg-emerald-400 transition-all duration-300" style={{ width: `${steps.length ? (currentStep / steps.length) * 100 : 0}%` }} />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid-lab relative flex-1 overflow-hidden bg-[#f8f9fa]">
               <div className="pointer-events-none absolute bottom-6 right-6 text-6xl font-black text-slate-900/5">TREE VIEW</div>
               <TreeCanvas tree={tree} steps={steps} currentStep={currentStep} answer={answer} />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 border-t border-slate-200 p-4">
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-white p-3 md:grid-cols-4 md:gap-3 md:p-4">
+              <button className="rounded-xl bg-slate-700 px-3 py-3 font-black text-white" onClick={resetSteps}>
+                Reiniciar
+              </button>
               <button className="rounded-xl bg-amber-600 px-3 py-3 font-black text-white" onClick={play}>
-                Play
+                Play automatico
               </button>
               <button className="rounded-xl bg-orange-700 px-3 py-3 font-black text-white" onClick={nextStep}>
                 Siguiente paso
+              </button>
+              <button className="rounded-xl bg-blue-700 px-3 py-3 font-black text-white" onClick={editExpression}>
+                Editar formula
               </button>
             </div>
           </section>
